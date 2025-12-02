@@ -50,6 +50,7 @@
             background-color: white;
             color: #64748b;
             border-color: #e2e8f0;
+            position: relative; /* For absolute positioning of flag */
         }
         .nav-item:hover { border-color: #94a3b8; }
         .nav-item.active { border-color: #2563eb; color: #2563eb; ring: 2px solid #bfdbfe; }
@@ -57,6 +58,18 @@
         
         .nav-item.nav-correct { background-color: #10b981; color: white; border-color: #10b981; }
         .nav-item.nav-wrong { background-color: #ef4444; color: white; border-color: #ef4444; }
+
+        /* Flag Indicator on Nav Item */
+        .flag-indicator {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 10px;
+            height: 10px;
+            background-color: #f97316; /* Orange */
+            border-radius: 50%;
+            border: 1px solid white;
+        }
 
         .highlight-yellow { 
             background-color: #fef08a; 
@@ -111,7 +124,13 @@
         <div class="h-16 border-b border-gray-200 flex items-center justify-between px-4 md:px-6 bg-white shrink-0 z-20 shadow-sm">
             <div class="font-bold text-gray-700 text-lg">Question <span id="current-q-num">1</span> of <span id="total-q-num">--</span></div>
             
-            <div class="flex items-center space-x-2 md:space-x-4">
+            <div class="flex items-center space-x-2 md:space-x-3">
+                <!-- Flag Button -->
+                <button id="flag-btn" class="flex items-center space-x-1 px-3 py-1.5 rounded transition border select-none text-gray-500 border-gray-300 hover:bg-gray-50" title="Flag for review">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg>
+                    <span class="text-sm font-bold hidden md:inline">Flag</span>
+                </button>
+
                 <!-- Highlight Tool -->
                 <button id="highlight-btn" type="button" class="flex items-center space-x-1 px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition border border-yellow-300 select-none">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
@@ -222,7 +241,8 @@
             // --- STATE ---
             let questions = [];
             let userAnswers = {}; 
-            let questionHighlights = {}; // { [qIndex]: [{start, end}] }
+            let questionHighlights = {}; 
+            let questionFlags = {}; // { [qIndex]: boolean }
             let questionHTMLStates = {}; 
             let currentQuestionIndex = 0;
             let timerInterval;
@@ -247,6 +267,7 @@
             const submitBtnSidebar = document.getElementById('submit-btn-sidebar');
             const submitBtnHeader = document.getElementById('submit-btn-header');
             const highlightBtn = document.getElementById('highlight-btn');
+            const flagBtn = document.getElementById('flag-btn');
             const reviewQuestionsBtn = document.getElementById('review-questions-btn');
             const backHomeBtn = document.getElementById('back-home-btn');
             const exitReviewBtn = document.getElementById('exit-review-btn');
@@ -305,6 +326,7 @@
                 userAnswers = {};
                 questionHighlights = {};
                 questionHTMLStates = {};
+                questionFlags = {};
                 isReviewMode = false;
                 currentQuestionIndex = 0;
                 
@@ -374,9 +396,17 @@
                 currentQNum.textContent = index + 1;
                 const q = questions[index];
                 
+                // Flag Button State
+                if (questionFlags[index]) {
+                    flagBtn.innerHTML = `<svg class="w-4 h-4 text-orange-500 fill-current" viewBox="0 0 24 24"><path d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg><span class="text-sm font-bold text-orange-600 hidden md:inline">Flagged</span>`;
+                    flagBtn.className = "flex items-center space-x-1 px-3 py-1.5 rounded transition border select-none bg-orange-50 border-orange-200";
+                } else {
+                    flagBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg><span class="text-sm font-bold hidden md:inline">Flag</span>`;
+                    flagBtn.className = "flex items-center space-x-1 px-3 py-1.5 rounded transition border select-none text-gray-500 border-gray-300 hover:bg-gray-50";
+                }
+
                 // Initialize highlights if not present
                 if (!questionHighlights[index]) questionHighlights[index] = [];
-                // Render with highlights
                 renderQuestionWithHighlights(index);
 
                 // Options
@@ -469,6 +499,15 @@
 
                     let classes = "nav-item ";
                     if (mobEl) mobEl.className = "nav-item inline-flex mr-2 shrink-0 ";
+
+                    // Flag Indicator
+                    el.innerHTML = index + 1; // Reset content
+                    if (questionFlags[index]) {
+                        el.innerHTML += `<div class="flag-indicator"></div>`;
+                        if (mobEl) mobEl.innerHTML = (index + 1) + `<div class="flag-indicator"></div>`;
+                    } else {
+                        if (mobEl) mobEl.innerHTML = index + 1;
+                    }
 
                     if (isReviewMode) {
                         if (userAnswers[index] === q.CorrectAnswer) classes += "nav-correct ";
@@ -603,6 +642,11 @@
             highlightBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 handleHighlightAction();
+            });
+
+            flagBtn.addEventListener('click', () => {
+                questionFlags[currentQuestionIndex] = !questionFlags[currentQuestionIndex];
+                renderQuestion(currentQuestionIndex);
             });
 
             questionContainer.addEventListener('click', (e) => {
