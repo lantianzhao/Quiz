@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MBBS Exam Simulator</title>
+    <title>MBBS Exam Simulator - Multiplayer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- FIREBASE SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
@@ -24,168 +29,140 @@
             box-shadow: 0 0 0 1px #3b82f6;
         }
 
-        .option-btn.review-correct {
-            background-color: #d1fae5 !important;
-            border-color: #10b981 !important;
-            color: #065f46 !important;
-        }
-        .option-btn.review-wrong {
-            background-color: #fee2e2 !important;
-            border-color: #ef4444 !important;
-            color: #991b1b !important;
-        }
+        .option-btn.review-correct { background-color: #d1fae5 !important; border-color: #10b981 !important; color: #065f46 !important; }
+        .option-btn.review-wrong { background-color: #fee2e2 !important; border-color: #ef4444 !important; color: #991b1b !important; }
 
         .nav-item {
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 50%;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-            background-color: white;
-            color: #64748b;
-            border-color: #e2e8f0;
-            position: relative; /* For absolute positioning of flag */
+            width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; border: 2px solid transparent; background-color: white; color: #64748b; border-color: #e2e8f0;
+            position: relative;
         }
         .nav-item:hover { border-color: #94a3b8; }
         .nav-item.active { border-color: #2563eb; color: #2563eb; ring: 2px solid #bfdbfe; }
         .nav-item.answered { background-color: #dbeafe; color: #1e40af; border-color: #dbeafe; }
-        
         .nav-item.nav-correct { background-color: #10b981; color: white; border-color: #10b981; }
         .nav-item.nav-wrong { background-color: #ef4444; color: white; border-color: #ef4444; }
 
-        /* Flag Indicator on Nav Item */
-        .flag-indicator {
-            position: absolute;
-            top: -2px;
-            right: -2px;
-            width: 10px;
-            height: 10px;
-            background-color: #f97316; /* Orange */
-            border-radius: 50%;
-            border: 1px solid white;
-        }
-
-        .highlight-yellow { 
-            background-color: #fef08a; 
-            padding: 2px 0; 
-            border-radius: 2px; 
-            cursor: pointer; 
-        }
-        .highlight-yellow:hover {
-            background-color: #fde047;
-        }
+        .flag-indicator { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; background-color: #f97316; border-radius: 50%; border: 1px solid white; }
+        .highlight-yellow { background-color: #fef08a; padding: 2px 0; border-radius: 2px; cursor: pointer; }
+        .highlight-yellow:hover { background-color: #fde047; }
     </style>
 </head>
 <body class="h-screen flex flex-col text-gray-800 overflow-hidden relative">
 
-    <!-- ================= 1. HOME SCREEN ================= -->
-    <div id="home-screen" class="flex-grow flex items-center justify-center p-4 fade-in overflow-y-auto">
-        <div class="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-8 md:p-12 text-center my-auto">
-            <h1 class="text-4xl font-extrabold text-blue-900 mb-2">MBBS Exam Simulator</h1>
-            <p class="text-gray-500 mb-8">Second Year MBBS Practice • Exam Mode</p>
+    <!-- ================= 1. LOBBY SCREEN (NEW) ================= -->
+    <div id="lobby-screen" class="flex-grow flex items-center justify-center p-4 fade-in overflow-y-auto bg-gradient-to-br from-blue-50 to-indigo-50">
+        <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 text-center">
+            <h1 class="text-3xl font-extrabold text-blue-900 mb-2">MBBS Multiplayer</h1>
+            <p class="text-gray-500 mb-8">Join a room to study together</p>
 
-            <div id="loading-status" class="mb-8 p-4 bg-blue-50 rounded-lg text-blue-700 text-sm font-medium animate-pulse border border-blue-100">
-                Fetching latest questions from database...
-            </div>
-
-            <div class="bg-gray-50 rounded-xl p-6 mb-8 text-left border border-gray-100">
-                <label class="block text-sm font-bold text-gray-700 mb-3">⏱️ Exam Timer (Minutes)</label>
-                <div class="flex items-center space-x-4">
-                    <input type="number" id="time-input" value="10" min="0" max="180" class="w-24 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-center text-lg font-bold">
-                    <span class="text-sm text-gray-500">Set to 0 for unlimited time.</span>
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Your Name</label>
+                    <input type="text" id="player-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Dr. House">
                 </div>
-            </div>
+                
+                <div class="pt-4 border-t border-gray-100">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Join Existing Room</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="room-code-input" class="w-full p-3 border border-gray-300 rounded-lg outline-none uppercase" placeholder="Enter Code">
+                        <button id="join-room-btn" class="px-6 bg-gray-800 text-white font-bold rounded-lg hover:bg-black transition">Join</button>
+                    </div>
+                </div>
 
-            <button id="start-btn" type="button" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transform transition hover:-translate-y-1 mb-8 text-lg disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                Start Exam
-            </button>
+                <div class="relative flex py-2 items-center">
+                    <div class="flex-grow border-t border-gray-200"></div>
+                    <span class="flex-shrink-0 mx-4 text-gray-400 text-sm">OR</span>
+                    <div class="flex-grow border-t border-gray-200"></div>
+                </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-8 border-t border-gray-100">
-                <a href="https://docs.google.com/spreadsheets/d/1_gZrItBTPDVj6OLJyQReQm8yFtszS0F5nbJFT91InvE/edit?gid=0#gid=0" target="_blank" class="flex items-center justify-center space-x-2 px-4 py-3 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-blue-600 transition shadow-sm font-medium">
-                    <span>Edit Questions (Generator)</span>
-                </a>
-                <a href="https://docs.google.com/spreadsheets/d/1nEB7GqjzAdabQmq8IHUBEes33f8r7NEtndwvF42Cjgo/edit?gid=0#gid=0" target="_blank" class="flex items-center justify-center space-x-2 px-4 py-3 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-green-600 transition shadow-sm font-medium">
-                    <span>Correction Sheet</span>
-                </a>
+                <button id="create-room-btn" class="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-lg">
+                    Create New Room
+                </button>
+                
+                <!-- Practice Solo Link -->
+                <p class="text-center mt-4 text-sm text-gray-500">
+                    <a href="#" onclick="location.reload()" class="hover:text-blue-600 underline">Refresh to reset</a>
+                </p>
             </div>
         </div>
     </div>
 
-    <!-- ================= 2. QUIZ / REVIEW SCREEN ================= -->
-    <div id="quiz-screen" class="hidden h-screen flex-col fade-in bg-white">
-        
-        <!-- Header -->
-        <div class="h-16 border-b border-gray-200 flex items-center justify-between px-4 md:px-6 bg-white shrink-0 z-20 shadow-sm">
-            <div class="font-bold text-gray-700 text-lg">Question <span id="current-q-num">1</span> of <span id="total-q-num">--</span></div>
+    <!-- ================= 2. WAITING ROOM (NEW) ================= -->
+    <div id="waiting-room" class="hidden flex-grow flex items-center justify-center p-4 fade-in bg-white h-screen">
+        <div class="w-full max-w-lg text-center">
+            <div class="mb-8">
+                <span class="inline-block px-4 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-bold mb-2">Room Code</span>
+                <h1 id="display-room-code" class="text-6xl font-mono font-black text-gray-900 tracking-widest">ABCD</h1>
+            </div>
             
+            <div class="bg-gray-50 rounded-xl p-6 border border-gray-200 mb-8">
+                <h3 class="text-left text-sm font-bold text-gray-500 uppercase tracking-wide mb-4">Players in Lobby</h3>
+                <div id="player-list" class="space-y-2">
+                    <!-- Players injected here -->
+                </div>
+            </div>
+
+            <div id="host-controls" class="hidden">
+                <p class="text-sm text-gray-500 mb-4">You are the host. Configure exam and start when ready.</p>
+                <div class="flex justify-center items-center gap-4 mb-6">
+                    <label class="font-bold text-gray-700">Timer (mins):</label>
+                    <input type="number" id="host-timer-input" value="10" class="w-20 p-2 border rounded text-center font-mono">
+                </div>
+                <button id="host-start-btn" class="w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition transform hover:-translate-y-1">
+                    Start Exam for Everyone
+                </button>
+            </div>
+            <div id="guest-controls">
+                <div class="flex items-center justify-center space-x-2 text-blue-600 animate-pulse">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span class="font-bold">Waiting for host to start...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 3. QUIZ SCREEN ================= -->
+    <div id="quiz-screen" class="hidden h-screen flex-col fade-in bg-white">
+        <div class="h-16 border-b border-gray-200 flex items-center justify-between px-4 md:px-6 bg-white shrink-0 z-20 shadow-sm">
+            <div class="font-bold text-gray-700 text-lg">Question <span id="current-q-num">1</span></div>
             <div class="flex items-center space-x-2 md:space-x-3">
-                <!-- Flag Button -->
-                <button id="flag-btn" class="flex items-center space-x-1 px-3 py-1.5 rounded transition border select-none text-gray-500 border-gray-300 hover:bg-gray-50" title="Flag for review">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg>
+                <button id="flag-btn" class="flex items-center space-x-1 px-3 py-1.5 rounded transition border select-none text-gray-500 border-gray-300 hover:bg-gray-50">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg>
                     <span class="text-sm font-bold hidden md:inline">Flag</span>
                 </button>
-
-                <!-- Highlight Tool -->
-                <button id="highlight-btn" type="button" class="flex items-center space-x-1 px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition border border-yellow-300 select-none">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                <button id="highlight-btn" class="flex items-center space-x-1 px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 transition border border-yellow-300 select-none">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                     <span class="text-sm font-bold hidden md:inline">Highlight</span>
                 </button>
-                
-                <!-- Timer -->
                 <div id="timer-display" class="text-xl font-mono font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded border border-blue-100">--:--</div>
-                
-                <!-- Header Submit Button -->
-                <button id="submit-btn-header" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-bold shadow-sm">
-                    Submit
-                </button>
-
-                <!-- Exit Review Button -->
+                <button id="submit-btn-header" class="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-bold shadow-sm">Submit</button>
                 <button id="exit-review-btn" class="hidden px-4 py-1.5 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-bold">Exit</button>
             </div>
         </div>
 
         <div class="flex-grow flex overflow-hidden">
-            <!-- Sidebar -->
             <div class="w-72 bg-gray-50 border-r border-gray-200 flex flex-col shrink-0 hidden md:flex">
-                <div class="p-4 border-b border-gray-200 bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Question Navigator
-                </div>
+                <div class="p-4 border-b border-gray-200 bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">Navigator</div>
                 <div id="sidebar-container" class="p-4 grid grid-cols-4 gap-3 overflow-y-auto sidebar-scroll content-start"></div>
                 <div class="p-4 border-t border-gray-200 bg-white">
-                    <button id="submit-btn-sidebar" type="button" class="w-full py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition">
-                        Submit Exam
-                    </button>
+                    <button id="submit-btn-sidebar" class="w-full py-2 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition">Submit Exam</button>
                 </div>
             </div>
-
-            <!-- Question Area -->
             <div class="flex-grow overflow-y-auto p-4 md:p-10 bg-gray-50">
                 <div class="max-w-3xl mx-auto">
                     <div class="md:hidden mb-4 overflow-x-auto whitespace-nowrap pb-2" id="mobile-nav-container"></div>
-
                     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 md:p-10 min-h-[500px]">
-                        <!-- Question Text -->
                         <div id="question-text-container" class="text-lg md:text-xl font-medium text-gray-900 leading-relaxed mb-8 selection:bg-yellow-200 selection:text-black"></div>
-                        
-                        <!-- Options -->
                         <div id="options-container" class="space-y-3"></div>
-
-                        <!-- Explanation -->
                         <div id="explanation-container" class="hidden mt-8 bg-blue-50 p-6 rounded-lg border border-blue-100 fade-in">
                             <h3 class="text-sm font-bold text-blue-800 uppercase tracking-wide mb-2">Explanation</h3>
                             <div id="explanation-text" class="text-blue-900 leading-relaxed"></div>
                         </div>
-
-                        <!-- Footer Nav -->
                         <div class="flex justify-between mt-10 pt-6 border-t border-gray-100">
-                            <button id="prev-btn" type="button" class="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded hover:bg-gray-50 disabled:opacity-50">Previous</button>
-                            <button id="next-btn" type="button" class="px-6 py-2 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 shadow-sm">Next Question</button>
+                            <button id="prev-btn" class="px-6 py-2 bg-white border border-gray-300 text-gray-700 font-medium rounded hover:bg-gray-50 disabled:opacity-50">Previous</button>
+                            <button id="next-btn" class="px-6 py-2 bg-blue-600 text-white font-medium rounded hover:bg-blue-700 shadow-sm">Next Question</button>
                         </div>
                     </div>
                 </div>
@@ -193,40 +170,52 @@
         </div>
     </div>
 
-    <!-- ================= 3. SUMMARY SCREEN ================= -->
+    <!-- ================= 4. SUMMARY / LEADERBOARD SCREEN ================= -->
     <div id="summary-screen" class="hidden flex-grow flex items-center justify-center p-4 fade-in bg-gray-50 h-screen">
-        <div class="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8 md:p-12 text-center">
-            <h2 class="text-3xl font-extrabold text-gray-900 mb-2">Exam Summary</h2>
-            <p class="text-gray-500 mb-8">You have completed the exam.</p>
-
-            <div class="flex justify-center items-center space-x-12 mb-10">
-                <div class="text-center">
-                    <div class="text-5xl font-extrabold text-blue-600 mb-1" id="summary-score">0/0</div>
-                    <div class="text-xs text-gray-500 uppercase tracking-widest font-semibold">Total Score</div>
+        <div class="w-full max-w-4xl bg-white rounded-2xl shadow-xl p-8 md:p-12">
+            <h2 class="text-3xl font-extrabold text-gray-900 mb-6 text-center">Exam Results</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- My Score -->
+                <div class="text-center p-6 bg-blue-50 rounded-xl border border-blue-100">
+                    <h3 class="text-lg font-bold text-gray-600 mb-4">Your Performance</h3>
+                    <div class="flex justify-center items-center space-x-8">
+                        <div>
+                            <div class="text-4xl font-extrabold text-blue-600" id="summary-score">--</div>
+                            <div class="text-xs text-gray-500 uppercase font-bold">Score</div>
+                        </div>
+                        <div>
+                            <div class="text-4xl font-extrabold text-gray-800" id="summary-percent">--%</div>
+                            <div class="text-xs text-gray-500 uppercase font-bold">Percentage</div>
+                        </div>
+                    </div>
+                    <button id="review-questions-btn" class="mt-6 w-full py-2 bg-white border border-blue-200 text-blue-700 font-bold rounded-lg hover:bg-blue-100">Review Questions</button>
                 </div>
-                <div class="w-px h-16 bg-gray-200"></div>
-                <div class="text-center">
-                    <div class="text-5xl font-extrabold text-gray-800 mb-1" id="summary-percent">0%</div>
-                    <div class="text-xs text-gray-500 uppercase tracking-widest font-semibold">Percentage</div>
+
+                <!-- Leaderboard -->
+                <div class="p-6 bg-gray-50 rounded-xl border border-gray-200 flex flex-col h-full">
+                    <h3 class="text-lg font-bold text-gray-600 mb-4 flex items-center">
+                        <span>🏆 Live Leaderboard</span>
+                        <div class="ml-auto w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    </h3>
+                    <div id="leaderboard-list" class="space-y-2 overflow-y-auto max-h-48 flex-grow">
+                        <!-- Scores injected here -->
+                        <div class="text-sm text-gray-400 italic">Waiting for other players to finish...</div>
+                    </div>
                 </div>
             </div>
 
-            <div class="space-y-3">
-                <button id="review-questions-btn" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition">
-                    Review Questions
-                </button>
-                <button id="back-home-btn" class="w-full py-4 bg-white border-2 border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition">
-                    Back to Home Page
-                </button>
+            <div class="mt-8 text-center">
+                <button onclick="location.reload()" class="px-8 py-3 bg-gray-800 text-white font-bold rounded-xl hover:bg-black transition">Leave Room</button>
             </div>
         </div>
     </div>
 
-    <!-- ================= 4. CONFIRM MODAL ================= -->
+    <!-- MODAL -->
     <div id="custom-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 fade-in">
-        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full transform scale-100 transition-transform">
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
             <h3 class="text-xl font-bold text-gray-900 mb-2">Submit Exam?</h3>
-            <p class="text-gray-600 mb-6" id="modal-text">You have answered X of Y questions.</p>
+            <p class="text-gray-600 mb-6" id="modal-text">Confirm submission.</p>
             <div class="flex space-x-3">
                 <button id="modal-cancel" class="flex-1 py-2 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200">Cancel</button>
                 <button id="modal-confirm" class="flex-1 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">Submit</button>
@@ -235,479 +224,407 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            const API_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSH7UcYnc_kaF7q5nm9tWYSjS8DEE12SGwi97psvcERZdv7mm1AedCqEsidSTmoxsCSlKbcqJv9NTVP/pub?gid=0&single=true&output=csv';
-            
-            // --- STATE ---
-            let questions = [];
-            let userAnswers = {}; 
-            let questionHighlights = {}; 
-            let questionFlags = {}; // { [qIndex]: boolean }
-            let questionHTMLStates = {}; 
-            let currentQuestionIndex = 0;
-            let timerInterval;
-            let timeLeftSeconds = 0;
-            let isReviewMode = false;
+        // ======================================================
+        // 1. PASTE YOUR FIREBASE CONFIGURATION HERE
+        // ======================================================
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        // ======================================================
 
-            // --- DOM ELEMENTS ---
-            const homeScreen = document.getElementById('home-screen');
-            const quizScreen = document.getElementById('quiz-screen');
-            const summaryScreen = document.getElementById('summary-screen');
-            const loadingStatus = document.getElementById('loading-status');
-            const modal = document.getElementById('custom-modal');
-            const modalText = document.getElementById('modal-text');
-            const modalConfirmBtn = document.getElementById('modal-confirm');
-            const modalCancelBtn = document.getElementById('modal-cancel');
-            
-            // Buttons
-            const startBtn = document.getElementById('start-btn');
-            const timeInput = document.getElementById('time-input');
-            const prevBtn = document.getElementById('prev-btn');
-            const nextBtn = document.getElementById('next-btn');
-            const submitBtnSidebar = document.getElementById('submit-btn-sidebar');
-            const submitBtnHeader = document.getElementById('submit-btn-header');
-            const highlightBtn = document.getElementById('highlight-btn');
-            const flagBtn = document.getElementById('flag-btn');
-            const reviewQuestionsBtn = document.getElementById('review-questions-btn');
-            const backHomeBtn = document.getElementById('back-home-btn');
-            const exitReviewBtn = document.getElementById('exit-review-btn');
+        // --- GLOBAL VARIABLES ---
+        let db;
+        let questions = [];
+        const DATA_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSH7UcYnc_kaF7q5nm9tWYSjS8DEE12SGwi97psvcERZdv7mm1AedCqEsidSTmoxsCSlKbcqJv9NTVP/pub?gid=0&single=true&output=csv';
+        
+        // App State
+        let myRoomId = null;
+        let myName = "Student";
+        let isHost = false;
+        let examState = 'lobby'; // lobby, active, finished, review
+        
+        // Exam State
+        let userAnswers = {}; 
+        let questionHighlights = {}; 
+        let questionFlags = {}; 
+        let questionHTMLStates = {}; 
+        let currentQuestionIndex = 0;
+        let timerInterval;
+        let timeLeftSeconds = 0;
 
-            // Display
-            const currentQNum = document.getElementById('current-q-num');
-            const totalQNum = document.getElementById('total-q-num');
-            const timerDisplay = document.getElementById('timer-display');
-            const questionContainer = document.getElementById('question-text-container');
-            const optionsContainer = document.getElementById('options-container');
-            const sidebarContainer = document.getElementById('sidebar-container');
-            const mobileNavContainer = document.getElementById('mobile-nav-container');
-            const explanationContainer = document.getElementById('explanation-container');
-            const explanationText = document.getElementById('explanation-text');
-            const summaryScore = document.getElementById('summary-score');
-            const summaryPercent = document.getElementById('summary-percent');
+        // --- DOM ELEMENTS ---
+        const screens = {
+            lobby: document.getElementById('lobby-screen'),
+            waiting: document.getElementById('waiting-room'),
+            quiz: document.getElementById('quiz-screen'),
+            summary: document.getElementById('summary-screen')
+        };
 
-            // --- 1. FETCH DATA ---
-            async function fetchQuestions() {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!firebase.apps.length) {
                 try {
-                    const response = await fetch(API_URL);
-                    const csvText = await response.text();
-                    const rows = csvText.trim().split('\n');
-                    questions = []; 
-                    for (let i = 1; i < rows.length; i++) {
-                        if (!rows[i].trim()) continue;
-                        const values = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); 
-                        const clean = (val) => val ? val.trim().replace(/^"|"$/g, '').replace(/""/g, '"') : '';
-                        const q = {
-                            Question: clean(values[0]),
-                            OptionA: clean(values[1]),
-                            OptionB: clean(values[2]),
-                            OptionC: clean(values[3]),
-                            OptionD: clean(values[4]),
-                            OptionE: clean(values[5]),
-                            CorrectAnswer: clean(values[6]).toUpperCase(),
-                            Explanation: clean(values[7])
-                        };
-                        if (q.Question && ['A','B','C','D','E'].includes(q.CorrectAnswer)) {
-                            questions.push(q);
-                        }
-                    }
-                    if (questions.length > 0) {
-                        loadingStatus.textContent = `✅ Loaded ${questions.length} questions. Ready.`;
-                        loadingStatus.className = "mb-8 p-4 bg-green-50 rounded-lg text-green-700 text-sm font-medium border border-green-100";
-                        startBtn.disabled = false;
-                    }
-                } catch (error) {
-                    loadingStatus.textContent = "❌ Error loading. Check internet connection.";
-                    loadingStatus.className = "mb-8 p-4 bg-red-50 rounded-lg text-red-700 text-sm font-medium border border-red-100";
+                    firebase.initializeApp(firebaseConfig);
+                    db = firebase.firestore();
+                    console.log("Firebase initialized");
+                } catch(e) {
+                    alert("Error: Firebase Config is missing or invalid. Please check the code.");
                 }
             }
+            
+            // Initial Fetch
+            fetchQuestions();
 
-            // --- 2. EXAM CONTROL ---
-            function startExam() {
-                userAnswers = {};
-                questionHighlights = {};
-                questionHTMLStates = {};
-                questionFlags = {};
-                isReviewMode = false;
-                currentQuestionIndex = 0;
-                
-                const minutes = parseInt(timeInput.value);
-                if (minutes && minutes > 0) {
-                    timeLeftSeconds = minutes * 60;
-                    startTimer();
-                } else {
-                    timerDisplay.textContent = "∞";
-                }
+            // Bind Lobby Buttons
+            document.getElementById('create-room-btn').onclick = createRoom;
+            document.getElementById('join-room-btn').onclick = joinRoom;
+            document.getElementById('host-start-btn').onclick = startRoomExam;
+            
+            // Bind Exam Buttons
+            document.getElementById('start-btn').style.display = 'none'; // Hide offline start button
+            document.getElementById('prev-btn').onclick = () => { if(currentQuestionIndex>0) renderQuestion(currentQuestionIndex-1); };
+            document.getElementById('next-btn').onclick = () => { renderQuestion(currentQuestionIndex+1); };
+            
+            const showSubmit = () => {
+                const ans = Object.keys(userAnswers).length;
+                document.getElementById('modal-text').textContent = `Answered: ${ans}/${questions.length}`;
+                document.getElementById('custom-modal').classList.remove('hidden');
+            };
+            document.getElementById('submit-btn-sidebar').onclick = showSubmit;
+            document.getElementById('submit-btn-header').onclick = showSubmit;
+            document.getElementById('modal-cancel').onclick = () => document.getElementById('custom-modal').classList.add('hidden');
+            document.getElementById('modal-confirm').onclick = submitExamToFirebase;
 
-                homeScreen.classList.add('hidden');
-                summaryScreen.classList.add('hidden');
-                quizScreen.classList.remove('hidden');
-                quizScreen.style.display = 'flex';
-                
-                submitBtnSidebar.classList.remove('hidden');
-                submitBtnHeader.classList.remove('hidden');
-                exitReviewBtn.classList.add('hidden');
-                
-                totalQNum.textContent = questions.length;
-                renderSidebar();
-                renderQuestion(0);
-            }
-
-            function finishExam() {
-                clearInterval(timerInterval);
-                modal.classList.add('hidden');
-                
-                let correctCount = 0;
-                questions.forEach((q, index) => {
-                    if (userAnswers[index] === q.CorrectAnswer) correctCount++;
-                });
-
-                summaryScore.textContent = `${correctCount}/${questions.length}`;
-                const percent = Math.round((correctCount / questions.length) * 100) || 0;
-                summaryPercent.textContent = `${percent}%`;
-
-                if (percent >= 80) summaryPercent.className = "text-5xl font-extrabold text-green-600 mb-1";
-                else if (percent >= 50) summaryPercent.className = "text-5xl font-extrabold text-yellow-600 mb-1";
-                else summaryPercent.className = "text-5xl font-extrabold text-red-600 mb-1";
-
-                quizScreen.classList.add('hidden');
-                quizScreen.style.display = 'none';
-                summaryScreen.classList.remove('hidden');
-                summaryScreen.style.display = 'flex';
-                window.scrollTo(0, 0);
-            }
-
-            function startReviewMode() {
-                isReviewMode = true;
-                summaryScreen.classList.add('hidden');
-                quizScreen.classList.remove('hidden');
-                quizScreen.style.display = 'flex';
-                
-                submitBtnSidebar.classList.add('hidden');
-                submitBtnHeader.classList.add('hidden');
-                exitReviewBtn.classList.remove('hidden');
-                
-                renderSidebar();
-                renderQuestion(0);
-            }
-
-            // --- 3. RENDERING ---
-            function renderQuestion(index) {
-                currentQuestionIndex = index;
-                currentQNum.textContent = index + 1;
-                const q = questions[index];
-                
-                // Flag Button State
-                if (questionFlags[index]) {
-                    flagBtn.innerHTML = `<svg class="w-4 h-4 text-orange-500 fill-current" viewBox="0 0 24 24"><path d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg><span class="text-sm font-bold text-orange-600 hidden md:inline">Flagged</span>`;
-                    flagBtn.className = "flex items-center space-x-1 px-3 py-1.5 rounded transition border select-none bg-orange-50 border-orange-200";
-                } else {
-                    flagBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg><span class="text-sm font-bold hidden md:inline">Flag</span>`;
-                    flagBtn.className = "flex items-center space-x-1 px-3 py-1.5 rounded transition border select-none text-gray-500 border-gray-300 hover:bg-gray-50";
-                }
-
-                // Initialize highlights if not present
-                if (!questionHighlights[index]) questionHighlights[index] = [];
-                renderQuestionWithHighlights(index);
-
-                // Options
-                optionsContainer.innerHTML = '';
-                ['A', 'B', 'C', 'D', 'E'].forEach(letter => {
-                    const text = q[`Option${letter}`];
-                    if (!text && letter === 'E') return;
-
-                    const btn = document.createElement('button');
-                    let baseClasses = `option-btn w-full text-left p-4 rounded-xl border-2 border-gray-200 bg-white text-gray-700 text-lg flex items-start `;
-                    
-                    if (isReviewMode) {
-                        if (letter === q.CorrectAnswer) baseClasses += "review-correct font-bold ";
-                        else if (userAnswers[index] === letter) baseClasses += "review-wrong ";
-                    } else {
-                        if (userAnswers[index] === letter) baseClasses += "selected ";
-                    }
-                    
-                    btn.className = baseClasses;
-                    btn.innerHTML = `<span class="font-bold mr-3 text-gray-400 w-6">${letter}</span> <span>${text}</span>`;
-                    
-                    if (!isReviewMode) {
-                        btn.onclick = () => {
-                            userAnswers[index] = letter;
-                            updateSidebarStyles();
-                            renderQuestion(index);
-                        };
-                    }
-                    optionsContainer.appendChild(btn);
-                });
-
-                // Explanation
-                if (isReviewMode) {
-                    explanationContainer.classList.remove('hidden');
-                    explanationText.innerHTML = q.Explanation || "No explanation provided.";
-                } else {
-                    explanationContainer.classList.add('hidden');
-                }
-
-                // Nav Buttons
-                prevBtn.disabled = index === 0;
-                
-                if (index === questions.length - 1) {
-                    if (isReviewMode) {
-                        nextBtn.textContent = "Finish Review";
-                        nextBtn.onclick = () => location.reload();
-                    } else {
-                        nextBtn.textContent = "Submit Exam";
-                        nextBtn.onclick = showSubmitModal;
-                    }
-                } else {
-                    nextBtn.textContent = "Next Question";
-                    nextBtn.onclick = () => {
-                        renderQuestion(index + 1);
-                    };
-                }
-
-                updateSidebarStyles();
-            }
-
-            function renderSidebar() {
-                sidebarContainer.innerHTML = '';
-                mobileNavContainer.innerHTML = '';
-                
-                questions.forEach((q, index) => {
-                    const navItem = document.createElement('div');
-                    navItem.textContent = index + 1;
-                    navItem.id = `nav-${index}`;
-                    
-                    const mobileItem = navItem.cloneNode(true);
-                    mobileItem.id = `mobile-nav-${index}`;
-
-                    const handleClick = () => {
-                        renderQuestion(index);
-                    };
-                    navItem.onclick = handleClick;
-                    mobileItem.onclick = handleClick;
-
-                    sidebarContainer.appendChild(navItem);
-                    mobileNavContainer.appendChild(mobileItem);
-                });
-                updateSidebarStyles();
-            }
-
-            function updateSidebarStyles() {
-                questions.forEach((q, index) => {
-                    const el = document.getElementById(`nav-${index}`);
-                    const mobEl = document.getElementById(`mobile-nav-${index}`);
-                    if (!el) return;
-
-                    let classes = "nav-item ";
-                    if (mobEl) mobEl.className = "nav-item inline-flex mr-2 shrink-0 ";
-
-                    // Flag Indicator
-                    el.innerHTML = index + 1; // Reset content
-                    if (questionFlags[index]) {
-                        el.innerHTML += `<div class="flag-indicator"></div>`;
-                        if (mobEl) mobEl.innerHTML = (index + 1) + `<div class="flag-indicator"></div>`;
-                    } else {
-                        if (mobEl) mobEl.innerHTML = index + 1;
-                    }
-
-                    if (isReviewMode) {
-                        if (userAnswers[index] === q.CorrectAnswer) classes += "nav-correct ";
-                        else if (userAnswers[index]) classes += "nav-wrong ";
-                        else classes += "border-gray-200 ";
-                    } else {
-                        if (userAnswers[index]) classes += "answered ";
-                    }
-
-                    if (index === currentQuestionIndex) {
-                        classes += "active ring-2 ring-blue-300 ";
-                    }
-
-                    el.className = classes;
-                    if(mobEl) mobEl.className = classes + "inline-flex mr-2 shrink-0";
-                    
-                    if (index === currentQuestionIndex) {
-                        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
-                });
-            }
-
-            // --- 4. HIGHLIGHTER HELPERS ---
-            function getTextAndMap(root) {
-                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
-                let node, text = '';
-                const map = [];
-                let abs = 0;
-                while ((node = walker.nextNode())) {
-                    const t = node.nodeValue;
-                    if (!t) continue;
-                    const start = abs;
-                    const end = start + t.length;
-                    map.push({ node, startInNode: 0, absStart: start, absEnd: end });
-                    text += t;
-                    abs = end;
-                }
-                return { text, map };
-            }
-
-            function rangeToOffsets(range, map) {
-                const { startContainer, startOffset, endContainer, endOffset } = range;
-                function findAbs(container, offset) {
-                    for (const seg of map) {
-                        if (seg.node === container) return seg.absStart + offset;
-                    }
-                    let node = container;
-                    while (node && node.firstChild) node = node.firstChild;
-                    if (node && node.nodeType === 3) {
-                        const seg = map.find(s => s.node === node);
-                        if (seg) return seg.absStart + Math.min(offset, node.nodeValue.length);
-                    }
-                    return null;
-                }
-                const absStart = findAbs(startContainer, startOffset);
-                const absEnd = findAbs(endContainer, endOffset);
-                if (absStart == null || absEnd == null) return null;
-                const start = Math.min(absStart, absEnd);
-                const end = Math.max(absStart, absEnd);
-                if (start === end) return null;
-                return { start, end };
-            }
-
-            function mergeRangesInPlace(ranges) {
-                ranges.sort((a,b) => a.start - b.start || a.end - b.end);
-                const merged = [];
-                for (const r of ranges) {
-                    if (!merged.length || r.start > merged[merged.length-1].end) {
-                        merged.push({ ...r });
-                    } else {
-                        merged[merged.length-1].end = Math.max(merged[merged.length-1].end, r.end);
-                    }
-                }
-                ranges.length = 0;
-                ranges.push(...merged);
-            }
-
-            function escapeHtml(s) {
-                return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-            }
-
-            function renderQuestionWithHighlights(index) {
-                const q = questions[index];
-                const source = q.Question;
-                const ranges = (questionHighlights[index] || []).slice().sort((a,b)=>a.start-b.start);
-                
-                let html = '';
-                let cursor = 0;
-                for (const r of ranges) {
-                    const start = Math.max(0, Math.min(source.length, r.start));
-                    const end = Math.max(0, Math.min(source.length, r.end));
-                    if (end <= cursor) continue;
-                    if (start > cursor) html += escapeHtml(source.slice(cursor, start));
-                    html += `<span class="highlight-yellow">${escapeHtml(source.slice(start, end))}</span>`;
-                    cursor = end;
-                }
-                if (cursor < source.length) html += escapeHtml(source.slice(cursor));
-                
-                questionContainer.innerHTML = html || escapeHtml(source);
-                questionHTMLStates[index] = questionContainer.innerHTML;
-            }
-
-            function handleHighlightAction() {
-                const selection = window.getSelection();
-                if (!selection.rangeCount || selection.isCollapsed) return;
-                const range = selection.getRangeAt(0);
-
-                if (!questionContainer.contains(range.commonAncestorContainer)) return;
-
-                const { text, map } = getTextAndMap(questionContainer);
-                const offsets = rangeToOffsets(range, map);
-                if (!offsets) return;
-
-                const idx = currentQuestionIndex;
-                if (!questionHighlights[idx]) questionHighlights[idx] = [];
-                const list = questionHighlights[idx];
-
-                // Check for exact match removal
-                const existingIdx = list.findIndex(r => r.start === offsets.start && r.end === offsets.end);
-                if (existingIdx !== -1) {
-                    list.splice(existingIdx, 1);
-                } else {
-                    list.push(offsets);
-                    mergeRangesInPlace(list);
-                }
-
-                renderQuestionWithHighlights(idx);
-                selection.removeAllRanges();
-            }
-
-            // --- 5. EVENT LISTENERS ---
-            highlightBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                handleHighlightAction();
-            });
-
-            flagBtn.addEventListener('click', () => {
+            // Tools
+            document.getElementById('highlight-btn').addEventListener('click', handleHighlightAction);
+            document.getElementById('flag-btn').onclick = () => {
                 questionFlags[currentQuestionIndex] = !questionFlags[currentQuestionIndex];
                 renderQuestion(currentQuestionIndex);
-            });
-
-            questionContainer.addEventListener('click', (e) => {
-                const span = e.target.closest('.highlight-yellow');
-                if (!span) return;
-                const selection = window.getSelection();
-                selection.removeAllRanges();
-                const range = document.createRange();
-                range.selectNodeContents(span);
-                selection.addRange(range);
-                handleHighlightAction();
-            });
-
-            // --- 6. SUBMIT LOGIC ---
-            function showSubmitModal() {
-                const answered = Object.keys(userAnswers).length;
-                const total = questions.length;
-                modalText.textContent = `You have answered ${answered} out of ${total} questions.`;
-                modal.classList.remove('hidden');
-            }
-
-            modalCancelBtn.onclick = () => modal.classList.add('hidden');
-            modalConfirmBtn.onclick = finishExam;
-
-            // --- 7. TIMER ---
-            function startTimer() {
-                updateTimerDisplay();
-                timerInterval = setInterval(() => {
-                    timeLeftSeconds--;
-                    updateTimerDisplay();
-                    if (timeLeftSeconds <= 0) {
-                        clearInterval(timerInterval);
-                        alert("Time's up!");
-                        finishExam();
-                    }
-                }, 1000);
-            }
-
-            function updateTimerDisplay() {
-                const m = Math.floor(timeLeftSeconds / 60);
-                const s = timeLeftSeconds % 60;
-                timerDisplay.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-                if (timeLeftSeconds < 60) {
-                    timerDisplay.classList.add('text-red-600', 'bg-red-50');
-                }
-            }
-
-            // Bindings
-            startBtn.onclick = startExam;
-            submitBtnSidebar.onclick = showSubmitModal;
-            submitBtnHeader.onclick = showSubmitModal;
-            reviewQuestionsBtn.onclick = startReviewMode;
-            backHomeBtn.onclick = () => location.reload();
-            exitReviewBtn.onclick = () => location.reload();
-            
-            prevBtn.onclick = () => {
-                if (currentQuestionIndex > 0) renderQuestion(currentQuestionIndex - 1);
             };
-
-            await fetchQuestions();
+            document.getElementById('review-questions-btn').onclick = startReviewMode;
+            document.getElementById('exit-review-btn').onclick = () => {
+                examState = 'finished';
+                showScreen('summary');
+            };
         });
+
+        // --- MULTIPLAYER LOGIC ---
+
+        function showScreen(name) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[name].classList.remove('hidden');
+            if(name === 'quiz' || name === 'summary') screens[name].style.display = 'flex';
+        }
+
+        async function createRoom() {
+            myName = document.getElementById('player-name').value || "Host";
+            const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+            myRoomId = code;
+            isHost = true;
+
+            await db.collection('rooms').doc(code).set({
+                status: 'waiting',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                timerMinutes: 10, // Default
+                players: {
+                    [myName]: { score: 0, status: 'joined', isHost: true }
+                }
+            });
+
+            enterWaitingRoom();
+        }
+
+        async function joinRoom() {
+            myName = document.getElementById('player-name').value || "Student";
+            const code = document.getElementById('room-code-input').value.toUpperCase();
+            if(!code) return alert("Enter a code!");
+
+            const roomRef = db.collection('rooms').doc(code);
+            const doc = await roomRef.get();
+            if (!doc.exists) return alert("Room not found!");
+
+            // Add self to players
+            await roomRef.set({
+                players: {
+                    [myName]: { score: 0, status: 'joined', isHost: false }
+                }
+            }, { merge: true });
+
+            myRoomId = code;
+            isHost = false;
+            enterWaitingRoom();
+        }
+
+        function enterWaitingRoom() {
+            showScreen('waiting');
+            document.getElementById('display-room-code').textContent = myRoomId;
+            
+            if(isHost) document.getElementById('host-controls').classList.remove('hidden');
+            else document.getElementById('guest-controls').classList.remove('hidden');
+
+            // Listen to Room Changes
+            db.collection('rooms').doc(myRoomId).onSnapshot(doc => {
+                if(!doc.exists) return;
+                const data = doc.data();
+
+                // Update Player List
+                const listEl = document.getElementById('player-list');
+                listEl.innerHTML = '';
+                Object.keys(data.players).forEach(name => {
+                    const p = data.players[name];
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center bg-white p-3 rounded shadow-sm border border-gray-100";
+                    div.innerHTML = `<span class="font-bold text-gray-700">${name} ${p.isHost?'(Host)':''}</span> 
+                                     <span class="text-xs uppercase px-2 py-1 rounded ${p.status==='finished'?'bg-green-100 text-green-700':'bg-gray-100 text-gray-500'}">${p.status}</span>`;
+                    listEl.appendChild(div);
+                });
+
+                // Update Leaderboard if in summary
+                if(examState === 'finished') updateLeaderboard(data.players);
+
+                // Handle Game Start
+                if(data.status === 'started' && examState === 'lobby') {
+                    startClientExam(data.timerMinutes);
+                }
+            });
+        }
+
+        async function startRoomExam() {
+            const mins = parseInt(document.getElementById('host-timer-input').value) || 10;
+            await db.collection('rooms').doc(myRoomId).update({
+                status: 'started',
+                timerMinutes: mins,
+                startTime: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        function startClientExam(minutes) {
+            examState = 'active';
+            showScreen('quiz');
+            timeLeftSeconds = minutes * 60;
+            startTimer();
+            renderSidebar();
+            renderQuestion(0);
+        }
+
+        async function submitExamToFirebase() {
+            document.getElementById('custom-modal').classList.add('hidden');
+            clearInterval(timerInterval);
+            
+            // Calculate Score
+            let correctCount = 0;
+            questions.forEach((q, index) => {
+                if (userAnswers[index] === q.CorrectAnswer) correctCount++;
+            });
+
+            // Local UI Update
+            const percent = Math.round((correctCount / questions.length) * 100) || 0;
+            document.getElementById('summary-score').textContent = `${correctCount}/${questions.length}`;
+            document.getElementById('summary-percent').textContent = `${percent}%`;
+            
+            // Firebase Update
+            await db.collection('rooms').doc(myRoomId).set({
+                players: {
+                    [myName]: { score: correctCount, status: 'finished', percentage: percent }
+                }
+            }, { merge: true });
+
+            examState = 'finished';
+            showScreen('summary');
+        }
+
+        function updateLeaderboard(players) {
+            const lb = document.getElementById('leaderboard-list');
+            lb.innerHTML = '';
+            
+            // Sort by score
+            const sorted = Object.entries(players).sort((a,b) => b[1].score - a[1].score);
+            
+            sorted.forEach(([name, data], idx) => {
+                if(data.status !== 'finished') return;
+                const div = document.createElement('div');
+                div.className = "flex justify-between p-3 bg-white border border-gray-100 rounded-lg";
+                div.innerHTML = `<span class="font-bold text-gray-700">#${idx+1} ${name}</span> <span class="font-mono font-bold text-blue-600">${data.score} (${data.percentage}%)</span>`;
+                lb.appendChild(div);
+            });
+        }
+
+        // --- EXISTING LOGIC (Highlighter, Render, etc) ---
+        // (Kept compact for integration)
+        
+        async function fetchQuestions() {
+            try {
+                const res = await fetch(DATA_URL);
+                const text = await res.text();
+                const rows = text.trim().split('\n');
+                questions = [];
+                for(let i=1; i<rows.length; i++) {
+                    if(!rows[i].trim()) continue;
+                    const v = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/); 
+                    const clean = s => s ? s.trim().replace(/^"|"$/g,'').replace(/""/g,'"') : '';
+                    if(v[0] && ['A','B','C','D','E'].includes(clean(v[6]).toUpperCase())) {
+                        questions.push({
+                            Question: clean(v[0]), OptionA: clean(v[1]), OptionB: clean(v[2]),
+                            OptionC: clean(v[3]), OptionD: clean(v[4]), OptionE: clean(v[5]),
+                            CorrectAnswer: clean(v[6]).toUpperCase(), Explanation: clean(v[7])
+                        });
+                    }
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        function renderQuestion(index) {
+            if(index < 0 || index >= questions.length) return;
+            currentQuestionIndex = index;
+            const q = questions[index];
+            document.getElementById('current-q-num').textContent = index+1;
+            
+            const qContainer = document.getElementById('question-text-container');
+            qContainer.innerHTML = questionHTMLStates[index] || q.Question;
+            
+            const optContainer = document.getElementById('options-container');
+            optContainer.innerHTML = '';
+            
+            ['A','B','C','D','E'].forEach(l => {
+                const txt = q[`Option${l}`];
+                if(!txt && l==='E') return;
+                const btn = document.createElement('button');
+                let cls = `option-btn w-full text-left p-4 rounded-xl border-2 border-gray-200 bg-white text-gray-700 text-lg flex items-start `;
+                if(examState === 'review') {
+                    if(l === q.CorrectAnswer) cls += "review-correct font-bold ";
+                    else if(userAnswers[index] === l) cls += "review-wrong ";
+                } else {
+                    if(userAnswers[index] === l) cls += "selected ";
+                }
+                btn.className = cls;
+                btn.innerHTML = `<span class="font-bold mr-3 text-gray-400 w-6">${l}</span> ${txt}`;
+                if(examState === 'active') {
+                    btn.onclick = () => { userAnswers[index] = l; updateNav(); renderQuestion(index); };
+                }
+                optContainer.appendChild(btn);
+            });
+
+            // Explanation
+            if(examState === 'review') {
+                document.getElementById('explanation-container').classList.remove('hidden');
+                document.getElementById('explanation-text').innerHTML = q.Explanation;
+            } else {
+                document.getElementById('explanation-container').classList.add('hidden');
+            }
+
+            // Flag
+            const flag = document.getElementById('flag-btn');
+            if(questionFlags[index]) flag.innerHTML = `<svg class="w-4 h-4 text-orange-500 fill-current" viewBox="0 0 24 24"><path d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg><span class="text-sm font-bold text-orange-600 hidden md:inline">Flagged</span>`;
+            else flag.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-8a2 2 0 012-2h10a2 2 0 012 2v8m0-8a2 2 0 00-2-2h-2m-4 0h-4"></path></svg><span class="text-sm font-bold hidden md:inline">Flag</span>`;
+
+            updateNav();
+        }
+
+        function renderSidebar() {
+            const sb = document.getElementById('sidebar-container');
+            const mb = document.getElementById('mobile-nav-container');
+            sb.innerHTML = ''; mb.innerHTML = '';
+            questions.forEach((_, i) => {
+                const el = document.createElement('div');
+                el.id = `nav-${i}`; el.textContent = i+1;
+                el.onclick = () => { saveHighlight(); renderQuestion(i); };
+                sb.appendChild(el);
+                
+                const mel = el.cloneNode(true);
+                mel.id = `mob-nav-${i}`;
+                mel.onclick = () => { saveHighlight(); renderQuestion(i); };
+                mb.appendChild(mel);
+            });
+            updateNav();
+        }
+
+        function updateNav() {
+            questions.forEach((q, i) => {
+                const el = document.getElementById(`nav-${i}`);
+                const mel = document.getElementById(`mob-nav-${i}`);
+                if(!el) return;
+                
+                let cls = "nav-item ";
+                let inner = i+1;
+                
+                if(questionFlags[i]) inner += `<div class="flag-indicator"></div>`;
+                
+                if(examState === 'review') {
+                    if(userAnswers[i] === q.CorrectAnswer) cls += "nav-correct ";
+                    else if(userAnswers[i]) cls += "nav-wrong ";
+                    else cls += "border-gray-200 ";
+                } else {
+                    if(userAnswers[i]) cls += "answered ";
+                }
+                
+                if(i === currentQuestionIndex) cls += "active ring-2 ring-blue-300 ";
+                
+                el.className = cls; el.innerHTML = inner;
+                mel.className = cls + " inline-flex mr-2 shrink-0"; mel.innerHTML = inner;
+                
+                if(i === currentQuestionIndex) el.scrollIntoView({behavior:'smooth', block:'nearest'});
+            });
+        }
+
+        // Highlighter
+        function saveHighlight() {
+            questionHTMLStates[currentQuestionIndex] = document.getElementById('question-text-container').innerHTML;
+        }
+        
+        function handleHighlightAction(e) {
+            e.preventDefault();
+            const sel = window.getSelection();
+            if(!sel.rangeCount || sel.isCollapsed) return;
+            const range = sel.getRangeAt(0);
+            const container = document.getElementById('question-text-container');
+            if(!container.contains(range.commonAncestorContainer)) return;
+
+            let parent = range.commonAncestorContainer;
+            if(parent.nodeType === 3) parent = parent.parentNode;
+
+            if(parent.classList.contains('highlight-yellow')) {
+                // Unwrap
+                const txt = document.createTextNode(parent.innerText);
+                parent.parentNode.replaceChild(txt, parent);
+            } else {
+                // Wrap
+                try {
+                    const span = document.createElement('span');
+                    span.className = "highlight-yellow";
+                    span.appendChild(range.extractContents());
+                    range.insertNode(span);
+                } catch(e) {}
+            }
+            sel.removeAllRanges();
+            saveHighlight();
+        }
+
+        function startReviewMode() {
+            examState = 'review';
+            showScreen('quiz');
+            document.getElementById('submit-btn-sidebar').classList.add('hidden');
+            document.getElementById('submit-btn-header').classList.add('hidden');
+            document.getElementById('exit-review-btn').classList.remove('hidden');
+            renderQuestion(0);
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeftSeconds--;
+                const m = Math.floor(timeLeftSeconds/60).toString().padStart(2,'0');
+                const s = (timeLeftSeconds%60).toString().padStart(2,'0');
+                document.getElementById('timer-display').textContent = `${m}:${s}`;
+                if(timeLeftSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    alert("Time is up!");
+                    submitExamToFirebase();
+                }
+            }, 1000);
+        }
     </script>
 </body>
 </html>
