@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MBBS Quiz Master - Load from Google Sheet</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the app */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .option-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .correct-answer {
+            background-color: #10b981 !important; /* Emerald-500 */
+            color: white !important;
+            border-color: #059669 !important;
+            transform: scale(1.02);
+        }
+        .incorrect-answer {
+            background-color: #ef4444 !important; /* Red-500 */
+            color: white !important;
+            border-color: #dc2626 !important;
+            transform: scale(1.02);
+        }
+        .disabled-btn {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        /* Mobile adjustment for options */
+        @media (max-width: 640px) {
+            .option-btn {
+                padding: 0.75rem 1rem;
+                font-size: 0.875rem;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4">
+
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-2xl p-6 md:p-10 mt-6">
+        <!-- Header -->
+        <h1 class="text-3xl font-bold text-center text-blue-800 mb-2">MBBS Question Bank</h1>
+        <p id="progress-text" class="text-center text-sm text-gray-500 mb-8">Loading questions...</p>
+
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="flex flex-col items-center justify-center p-12">
+            <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-blue-500 font-medium">Fetching question data...</p>
+        </div>
+
+        <!-- Quiz Content (Hidden until loaded) -->
+        <div id="quiz-content" class="hidden">
+            <!-- Question Box -->
+            <div class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-400 rounded-lg">
+                <p id="question-text" class="text-lg font-semibold text-gray-900"></p>
+            </div>
+
+            <!-- Options -->
+            <div id="options-container" class="space-y-3 mb-6">
+                <!-- Buttons will be injected here -->
+            </div>
+
+            <!-- Feedback Area -->
+            <div id="feedback-area" class="hidden rounded-lg p-4 transition-all duration-300">
+                <h3 id="feedback-title" class="text-xl font-bold mb-2"></h3>
+                <p id="explanation-text" class="text-sm"></p>
+            </div>
+
+            <!-- Navigation -->
+            <div class="flex justify-center mt-6">
+                <button id="next-btn" class="px-8 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-lg hover:bg-blue-700 transition duration-150 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    Next Question
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        // IMPORTANT: Replace these placeholders with your actual Google Sheet ID and GID (Sheet Index)
+        const SPREADSHEET_ID = '2PACX-1vSH7UcYnc_kaF7q5nm9tWYSjS8DEE12SGwi97psvcERZdv7mm1AedCqEsidSTmoxsCSlKbcqJv9NTVP'; // e.g., '1BxiA_j4Y1o1T-H_8b9W-42n9-1tP-z-q-1tP'
+        const GID = '0'; // The sheet index, often '0' if it's the first tab, or a long number like '12345678'
+        const API_URL = `https://docs.google.com/spreadsheets/d/${2PACX-1vSH7UcYnc_kaF7q5nm9tWYSjS8DEE12SGwi97psvcERZdv7mm1AedCqEsidSTmoxsCSlKbcqJv9NTVP}/gviz/tq?tqx=out:json&gid=${GID}`;
+        // ---------------------
+
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let answered = false;
+        
+        // DOM Elements
+        const spinner = document.getElementById('loading-spinner');
+        const quizContent = document.getElementById('quiz-content');
+        const progressText = document.getElementById('progress-text');
+        const questionText = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+        const feedbackArea = document.getElementById('feedback-area');
+        const feedbackTitle = document.getElementById('feedback-title');
+        const explanationText = document.getElementById('explanation-text');
+        const nextBtn = document.getElementById('next-btn');
+
+        // Utility to map column headers to option letters
+        const OPTION_MAP = {
+            A: 'OptionA',
+            B: 'OptionB',
+            C: 'OptionC',
+            D: 'OptionD'
+        };
+
+        // --- FETCH DATA FROM GOOGLE SHEET ---
+        async function fetchQuestions() {
+            try {
+                const response = await fetch(API_URL);
+                const text = await response.text();
+                
+                // Parse the GVIZ JSON response format
+                const jsonStart = text.indexOf('({"table":');
+                const jsonEnd = text.lastIndexOf('});');
+                if (jsonStart === -1 || jsonEnd === -1) {
+                    throw new Error("Could not parse Google Sheet response. Check publish/sharing settings.");
+                }
+                const jsonString = text.substring(jsonStart + 1, jsonEnd + 1);
+                const data = JSON.parse(jsonString);
+
+                // Map data rows to question objects
+                questions = data.table.rows
+                    .map(row => {
+                        // 'c' is the array of cell data
+                        const rowData = row.c;
+                        if (!rowData[0] || !rowData[0].v) return null; // Skip empty rows
+                        
+                        return {
+                            Question: rowData[0] ? rowData[0].v : '',
+                            OptionA: rowData[1] ? rowData[1].v : '',
+                            OptionB: rowData[2] ? rowData[2].v : '',
+                            OptionC: rowData[3] ? rowData[3].v : '',
+                            OptionD: rowData[4] ? rowData[4].v : '',
+                            CorrectAnswer: rowData[5] ? String(rowData[5].v).toUpperCase() : '',
+                            Explanation: rowData[6] ? rowData[6].v : 'No explanation provided.'
+                        };
+                    })
+                    .filter(q => q !== null && q.Question && q.CorrectAnswer); // Filter out invalid questions
+
+                if (questions.length === 0) {
+                    throw new Error("No valid questions found. Check your column headers and data structure.");
+                }
+                
+                initializeQuiz();
+
+            } catch (error) {
+                console.error("Error fetching or processing quiz data:", error);
+                spinner.innerHTML = `<p class="text-red-500 font-medium p-6">Error loading questions. Please check the console for details, ensure the Sheet ID/GID is correct, and the sheet is properly published/shared.</p>`;
+                progressText.textContent = 'Data Load Failed.';
+            }
+        }
+
+        // --- QUIZ LOGIC ---
+
+        function initializeQuiz() {
+            spinner.classList.add('hidden');
+            quizContent.classList.remove('hidden');
+            showQuestion(currentQuestionIndex);
+        }
+
+        function showQuestion(index) {
+            const q = questions[index];
+            questionText.textContent = q.Question;
+            progressText.textContent = `Question ${index + 1} of ${questions.length}`;
+            
+            answered = false;
+            nextBtn.disabled = true;
+            feedbackArea.classList.add('hidden');
+            feedbackArea.classList.remove('bg-red-100', 'bg-green-100', 'border-red-400', 'border-green-400');
+
+            renderOptions(q);
+        }
+
+        function renderOptions(question) {
+            optionsContainer.innerHTML = '';
+            ['A', 'B', 'C', 'D'].forEach(letter => {
+                const optionKey = OPTION_MAP[letter];
+                const button = document.createElement('button');
+                button.classList.add('option-btn', 'w-full', 'text-left', 'p-3', 'rounded-lg', 'border-2', 'border-gray-300', 'bg-white', 'hover:bg-gray-50', 'text-gray-800', 'font-medium');
+                button.textContent = `${letter}. ${question[optionKey]}`;
+                button.dataset.answer = letter;
+                button.addEventListener('click', () => handleAnswer(button, letter, question));
+                optionsContainer.appendChild(button);
+            });
+        }
+
+        function handleAnswer(selectedButton, selectedLetter, question) {
+            if (answered) return;
+            answered = true;
+            nextBtn.disabled = false;
+
+            const allButtons = document.querySelectorAll('.option-btn');
+            const isCorrect = selectedLetter === question.CorrectAnswer;
+            
+            // Disable all buttons
+            allButtons.forEach(btn => btn.classList.add('disabled-btn'));
+
+            // Highlight Correct and Selected (if incorrect)
+            allButtons.forEach(btn => {
+                const btnLetter = btn.dataset.answer;
+                if (btnLetter === question.CorrectAnswer) {
+                    btn.classList.add('correct-answer');
+                } else if (btn === selectedButton && !isCorrect) {
+                    btn.classList.add('incorrect-answer');
+                }
+            });
+
+            // Show Feedback
+            showFeedback(isCorrect, question.Explanation);
+        }
+
+        function showFeedback(isCorrect, explanation) {
+            feedbackArea.classList.remove('hidden');
+            
+            if (isCorrect) {
+                feedbackTitle.textContent = "✅ Correct!";
+                feedbackArea.classList.add('bg-green-100', 'border-green-400', 'border-l-4');
+                feedbackTitle.classList.add('text-green-700');
+            } else {
+                feedbackTitle.textContent = "❌ Incorrect.";
+                feedbackArea.classList.add('bg-red-100', 'border-red-400', 'border-l-4');
+                feedbackTitle.classList.add('text-red-700');
+            }
+            explanationText.innerHTML = `<strong>Explanation:</strong> ${explanation}`;
+        }
+
+        function nextQuestion() {
+            currentQuestionIndex++;
+            if (currentQuestionIndex < questions.length) {
+                showQuestion(currentQuestionIndex);
+            } else {
+                // Quiz finished
+                questionText.textContent = "Quiz Complete!";
+                optionsContainer.innerHTML = `<p class="text-center text-lg text-gray-700 p-6">You've finished all ${questions.length} questions. Well done! Refresh the page to start over.</p>`;
+                nextBtn.classList.add('hidden');
+                feedbackArea.classList.add('hidden');
+                progressText.textContent = `Completed ${questions.length} of ${questions.length}`;
+            }
+        }
+
+        // --- EVENT LISTENERS AND INITIALIZATION ---
+        nextBtn.addEventListener('click', nextQuestion);
+        
+        // Start fetching data when the window loads
+        window.onload = fetchQuestions;
+    </script>
+</body>
+</html>
